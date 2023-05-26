@@ -169,11 +169,7 @@ class CrossAttentionBirchSan(nn.Module):
         query = self.to_q(x)
         context = default(context, x)
         key = self.to_k(context)
-        if value is not None:
-            value = self.to_v(value)
-        else:
-            value = self.to_v(context)
-
+        value = self.to_v(value) if value is not None else self.to_v(context)
         del context, x
 
         query = query.unflatten(-1, (self.heads, -1)).transpose(1,2).flatten(end_dim=1)
@@ -280,7 +276,6 @@ class CrossAttentionDoggettx(nn.Module):
 
         mem_free_total = model_management.get_free_memory(q.device)
 
-        gb = 1024 ** 3
         tensor_size = q.shape[0] * q.shape[1] * k.shape[1] * q.element_size()
         modifier = 3 if q.element_size() == 2 else 2.5
         mem_required = tensor_size * modifier
@@ -294,6 +289,7 @@ class CrossAttentionDoggettx(nn.Module):
 
         if steps > 64:
             max_res = math.floor(math.sqrt(math.sqrt(mem_free_total / 2.5)) / 8) * 64
+            gb = 1024 ** 3
             raise RuntimeError(f'Not enough memory, use lower resolution (max approx. {max_res}x{max_res}). '
                                f'Need: {mem_required/64/gb:0.1f}GB free, Have:{mem_free_total/gb:0.1f}GB free')
 
@@ -319,20 +315,19 @@ class CrossAttentionDoggettx(nn.Module):
                     del s2
                 break
             except model_management.OOM_EXCEPTION as e:
-                if first_op_done == False:
-                    torch.cuda.empty_cache()
-                    torch.cuda.ipc_collect()
-                    if cleared_cache == False:
-                        cleared_cache = True
-                        print("out of memory error, emptying cache and trying again")
-                        continue
-                    steps *= 2
-                    if steps > 64:
-                        raise e
-                    print("out of memory error, increasing steps and trying again", steps)
-                else:
+                if first_op_done != False:
                     raise e
 
+                torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
+                if cleared_cache == False:
+                    cleared_cache = True
+                    print("out of memory error, emptying cache and trying again")
+                    continue
+                steps *= 2
+                if steps > 64:
+                    raise e
+                print("out of memory error, increasing steps and trying again", steps)
         del q, k, v
 
         r2 = rearrange(r1, '(b h) n d -> b n (h d)', h=h)
@@ -495,13 +490,12 @@ if model_management.xformers_enabled():
 elif model_management.pytorch_attention_enabled():
     print("Using pytorch cross attention")
     CrossAttention = CrossAttentionPytorch
+elif args.use_split_cross_attention:
+    print("Using split optimization for cross attention")
+    CrossAttention = CrossAttentionDoggettx
 else:
-    if args.use_split_cross_attention:
-        print("Using split optimization for cross attention")
-        CrossAttention = CrossAttentionDoggettx
-    else:
-        print("Using sub quadratic optimization for cross attention, if you have memory or speed issues try using: --use-split-cross-attention")
-        CrossAttention = CrossAttentionBirchSan
+    print("Using sub quadratic optimization for cross attention, if you have memory or speed issues try using: --use-split-cross-attention")
+    CrossAttention = CrossAttentionBirchSan
 
 
 class BasicTransformerBlock(nn.Module):
@@ -532,10 +526,7 @@ class BasicTransformerBlock(nn.Module):
             transformer_patches = {}
 
         n = self.norm1(x)
-        if self.disable_self_attn:
-            context_attn1 = context
-        else:
-            context_attn1 = None
+        context_attn1 = context if self.disable_self_attn else None
         value_attn1 = None
 
         if "attn1_patch" in transformer_patches:

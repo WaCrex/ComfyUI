@@ -4,23 +4,20 @@ import math
 def load_torch_file(ckpt, safe_load=False):
     if ckpt.lower().endswith(".safetensors"):
         import safetensors.torch
-        sd = safetensors.torch.load_file(ckpt, device="cpu")
+        return safetensors.torch.load_file(ckpt, device="cpu")
     else:
         if safe_load:
-            if not 'weights_only' in torch.load.__code__.co_varnames:
+            if 'weights_only' not in torch.load.__code__.co_varnames:
                 print("Warning torch.load doesn't support weights_only on this pytorch version, loading unsafely.")
                 safe_load = False
-        if safe_load:
-            pl_sd = torch.load(ckpt, map_location="cpu", weights_only=True)
-        else:
-            pl_sd = torch.load(ckpt, map_location="cpu")
+        pl_sd = (
+            torch.load(ckpt, map_location="cpu", weights_only=True)
+            if safe_load
+            else torch.load(ckpt, map_location="cpu")
+        )
         if "global_step" in pl_sd:
             print(f"Global Step: {pl_sd['global_step']}")
-        if "state_dict" in pl_sd:
-            sd = pl_sd["state_dict"]
-        else:
-            sd = pl_sd
-    return sd
+        return pl_sd["state_dict"] if "state_dict" in pl_sd else pl_sd
 
 def transformers_convert(sd, prefix_from, prefix_to, number):
     resblock_to_replace = {
@@ -34,19 +31,19 @@ def transformers_convert(sd, prefix_from, prefix_to, number):
     for resblock in range(number):
         for x in resblock_to_replace:
             for y in ["weight", "bias"]:
-                k = "{}.transformer.resblocks.{}.{}.{}".format(prefix_from, resblock, x, y)
-                k_to = "{}.encoder.layers.{}.{}.{}".format(prefix_to, resblock, resblock_to_replace[x], y)
+                k = f"{prefix_from}.transformer.resblocks.{resblock}.{x}.{y}"
+                k_to = f"{prefix_to}.encoder.layers.{resblock}.{resblock_to_replace[x]}.{y}"
                 if k in sd:
                     sd[k_to] = sd.pop(k)
 
         for y in ["weight", "bias"]:
-            k_from = "{}.transformer.resblocks.{}.attn.in_proj_{}".format(prefix_from, resblock, y)
+            k_from = f"{prefix_from}.transformer.resblocks.{resblock}.attn.in_proj_{y}"
             if k_from in sd:
                 weights = sd.pop(k_from)
                 shape_from = weights.shape[0] // 3
                 for x in range(3):
                     p = ["self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj"]
-                    k_to = "{}.encoder.layers.{}.{}.{}".format(prefix_to, resblock, p[x], y)
+                    k_to = f"{prefix_to}.encoder.layers.{resblock}.{p[x]}.{y}"
                     sd[k_to] = weights[shape_from*x:shape_from*(x + 1)]
     return sd
 
@@ -191,8 +188,7 @@ class ProgressBar:
     def update_absolute(self, value, total=None):
         if total is not None:
             self.total = total
-        if value > self.total:
-            value = self.total
+        value = min(value, self.total)
         self.current = value
         if self.hook is not None:
             self.hook(self.current, self.total)

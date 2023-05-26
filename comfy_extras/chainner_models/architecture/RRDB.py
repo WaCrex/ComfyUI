@@ -273,9 +273,8 @@ class RRDBNet(nn.Module):
         )
         for state_key in state_keys:
             for k in self.state:
-                m = re.search(state_key, k)
-                if m:
-                    nbs.append(int(m.group(1)))
+                if m := re.search(state_key, k):
+                    nbs.append(int(m[1]))
             if nbs:
                 break
         return max(*nbs) + 1

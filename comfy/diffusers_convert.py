@@ -107,8 +107,7 @@ def convert_unet_state_dict(unet_state_dict):
         for sd_part, hf_part in unet_conversion_map_layer:
             v = v.replace(hf_part, sd_part)
         mapping[k] = v
-    new_state_dict = {v: unet_state_dict[k] for k, v in mapping.items()}
-    return new_state_dict
+    return {v: unet_state_dict[k] for k, v in mapping.items()}
 
 
 # ================#
@@ -247,13 +246,13 @@ def convert_text_enc_state_dict_v20(text_enc_dict):
         if None in tensors:
             raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
         relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
-        new_state_dict[relabelled_key + ".in_proj_weight"] = torch.cat(tensors)
+        new_state_dict[f"{relabelled_key}.in_proj_weight"] = torch.cat(tensors)
 
     for k_pre, tensors in capture_qkv_bias.items():
         if None in tensors:
             raise Exception("CORRUPTED MODEL: one of the q-k-v values for the text encoder was missing")
         relabelled_key = textenc_pattern.sub(lambda m: protected[re.escape(m.group(0))], k_pre)
-        new_state_dict[relabelled_key + ".in_proj_bias"] = torch.cat(tensors)
+        new_state_dict[f"{relabelled_key}.in_proj_bias"] = torch.cat(tensors)
 
     return new_state_dict
 
@@ -314,26 +313,35 @@ def load_diffusers(model_path, fp16=True, output_vae=True, output_clip=True, emb
 
     # Convert the UNet model
     unet_state_dict = convert_unet_state_dict(unet_state_dict)
-    unet_state_dict = {"model.diffusion_model." + k: v for k, v in unet_state_dict.items()}
+    unet_state_dict = {
+        f"model.diffusion_model.{k}": v for k, v in unet_state_dict.items()
+    }
 
     # Convert the VAE model
     vae_state_dict = convert_vae_state_dict(vae_state_dict)
-    vae_state_dict = {"first_stage_model." + k: v for k, v in vae_state_dict.items()}
+    vae_state_dict = {
+        f"first_stage_model.{k}": v for k, v in vae_state_dict.items()
+    }
 
     # Easiest way to identify v2.0 model seems to be that the text encoder (OpenCLIP) is deeper
     is_v20_model = "text_model.encoder.layers.22.layer_norm2.bias" in text_enc_dict
 
     if is_v20_model:
         # Need to add the tag 'transformer' in advance so we can knock it out from the final layer-norm
-        text_enc_dict = {"transformer." + k: v for k, v in text_enc_dict.items()}
+        text_enc_dict = {f"transformer.{k}": v for k, v in text_enc_dict.items()}
         text_enc_dict = convert_text_enc_state_dict_v20(text_enc_dict)
-        text_enc_dict = {"cond_stage_model.model." + k: v for k, v in text_enc_dict.items()}
+        text_enc_dict = {
+            f"cond_stage_model.model.{k}": v for k, v in text_enc_dict.items()
+        }
     else:
         text_enc_dict = convert_text_enc_state_dict(text_enc_dict)
-        text_enc_dict = {"cond_stage_model.transformer." + k: v for k, v in text_enc_dict.items()}
+        text_enc_dict = {
+            f"cond_stage_model.transformer.{k}": v
+            for k, v in text_enc_dict.items()
+        }
 
     # Put together new checkpoint
-    sd = {**unet_state_dict, **vae_state_dict, **text_enc_dict}
+    sd = unet_state_dict | vae_state_dict | text_enc_dict
 
     clip = None
     vae = None

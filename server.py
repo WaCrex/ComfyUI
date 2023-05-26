@@ -52,7 +52,7 @@ class PromptServer():
     def __init__(self, loop):
         PromptServer.instance = self
 
-        mimetypes.init(); 
+        mimetypes.init();
         mimetypes.types_map['.js'] = 'application/javascript; charset=utf-8'
         self.prompt_queue = None
         self.loop = loop
@@ -64,7 +64,7 @@ class PromptServer():
             middlewares.append(create_cors_middleware(args.enable_cors_header))
 
         self.app = web.Application(client_max_size=20971520, middlewares=middlewares)
-        self.sockets = dict()
+        self.sockets = {}
         self.web_root = os.path.join(os.path.dirname(
             os.path.realpath(__file__)), "web")
         routes = web.RouteTableDef()
@@ -91,10 +91,10 @@ class PromptServer():
                 # On reconnect if we are the currently executing client send the current node
                 if self.client_id == sid and self.last_node_id is not None:
                     await self.send("executing", { "node": self.last_node_id }, sid)
-                    
+
                 async for msg in ws:
                     if msg.type == aiohttp.WSMsgType.ERROR:
-                        print('ws connection closed with exception %s' % ws.exception())
+                        print(f'ws connection closed with exception {ws.exception()}')
             finally:
                 self.sockets.pop(sid, None)
             return ws
@@ -150,9 +150,7 @@ class PromptServer():
                 split = os.path.splitext(filename)
                 filepath = os.path.join(full_output_folder, filename)
 
-                if overwrite is not None and (overwrite == "true" or overwrite == "1"):
-                    pass
-                else:
+                if overwrite is None or overwrite not in ["true", "1"]:
                     i = 1
                     while os.path.exists(filepath):
                         filename = f"{split[0]} ({i}){split[1]}"
@@ -272,11 +270,9 @@ class PromptServer():
             info['display_name'] = nodes.NODE_DISPLAY_NAME_MAPPINGS[node_class] if node_class in nodes.NODE_DISPLAY_NAME_MAPPINGS.keys() else node_class
             info['description'] = ''
             info['category'] = 'sd'
-            if hasattr(obj_class, 'OUTPUT_NODE') and obj_class.OUTPUT_NODE == True:
-                info['output_node'] = True
-            else:
-                info['output_node'] = False
-
+            info['output_node'] = bool(
+                hasattr(obj_class, 'OUTPUT_NODE') and obj_class.OUTPUT_NODE == True
+            )
             if hasattr(obj_class, 'CATEGORY'):
                 info['category'] = obj_class.CATEGORY
             return info
@@ -384,16 +380,13 @@ class PromptServer():
         ])
 
     def get_queue_info(self):
-        prompt_info = {}
-        exec_info = {}
-        exec_info['queue_remaining'] = self.prompt_queue.get_tasks_remaining()
-        prompt_info['exec_info'] = exec_info
-        return prompt_info
+        exec_info = {'queue_remaining': self.prompt_queue.get_tasks_remaining()}
+        return {'exec_info': exec_info}
 
     async def send(self, event, data, sid=None):
         message = {"type": event, "data": data}
-       
-        if isinstance(message, str) == False:
+
+        if not isinstance(message, str):
             message = json.dumps(message)
 
         if sid is None:
@@ -424,7 +417,7 @@ class PromptServer():
             address = '0.0.0.0'
         if verbose:
             print("Starting server\n")
-            print("To see the GUI go to: http://{}:{}".format(address, port))
+            print(f"To see the GUI go to: http://{address}:{port}")
         if call_on_start is not None:
             call_on_start(address, port)
 

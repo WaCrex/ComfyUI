@@ -103,7 +103,7 @@ if __name__ == "__main__":
     if args.auto_launch:
         def startup_server(address, port):
             import webbrowser
-            webbrowser.open("http://{}:{}".format(address, port))
+            webbrowser.open(f"http://{address}:{port}")
         call_on_start = startup_server
 
     if os.name == "nt":

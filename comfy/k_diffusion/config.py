@@ -75,10 +75,10 @@ def make_model(config):
 def make_denoiser_wrapper(config):
     config = config['model']
     sigma_data = config.get('sigma_data', 1.)
-    has_variance = config.get('has_variance', False)
-    if not has_variance:
+    if has_variance := config.get('has_variance', False):
+        return partial(layers.DenoiserWithVariance, sigma_data=sigma_data)
+    else:
         return partial(layers.Denoiser, sigma_data=sigma_data)
-    return partial(layers.DenoiserWithVariance, sigma_data=sigma_data)
 
 
 def make_sample_density(config):

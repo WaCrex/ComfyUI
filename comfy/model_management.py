@@ -138,15 +138,12 @@ def get_torch_device():
     if vram_state == VRAMState.CPU:
         return torch.device("cpu")
     else:
-        if xpu_available:
-            return torch.device("xpu")
-        else:
-            return torch.cuda.current_device()
+        return torch.device("xpu") if xpu_available else torch.cuda.current_device()
 
 def get_torch_device_name(device):
     if hasattr(device, 'type'):
-        return "{}".format(device.type)
-    return "CUDA {}: {}".format(device, torch.cuda.get_device_name(device))
+        return f"{device.type}"
+    return f"CUDA {device}: {torch.cuda.get_device_name(device)}"
 
 try:
     print("Using device:", get_torch_device_name(get_torch_device()))
@@ -206,15 +203,20 @@ def load_model_gpu(model):
     elif vram_state == VRAMState.MPS:
         mps_device = torch.device("mps")
         real_model.to(mps_device)
-        pass
-    elif vram_state == VRAMState.NORMAL_VRAM or vram_state == VRAMState.HIGH_VRAM:
+    elif vram_state in [VRAMState.NORMAL_VRAM, VRAMState.HIGH_VRAM]:
         model_accelerated = False
         real_model.to(get_torch_device())
     else:
         if vram_state == VRAMState.NO_VRAM:
             device_map = accelerate.infer_auto_device_map(real_model, max_memory={0: "256MiB", "cpu": "16GiB"})
         elif vram_state == VRAMState.LOW_VRAM:
-            device_map = accelerate.infer_auto_device_map(real_model, max_memory={0: "{}MiB".format(total_vram_available_mb), "cpu": "16GiB"})
+            device_map = accelerate.infer_auto_device_map(
+                real_model,
+                max_memory={
+                    0: f"{total_vram_available_mb}MiB",
+                    "cpu": "16GiB",
+                },
+            )
 
         accelerate.dispatch_model(real_model, device_map=device_map, main_device=get_torch_device())
         model_accelerated = True
@@ -226,7 +228,7 @@ def load_controlnet_gpu(control_models):
     if vram_state == VRAMState.CPU:
         return
 
-    if vram_state == VRAMState.LOW_VRAM or vram_state == VRAMState.NO_VRAM:
+    if vram_state in [VRAMState.LOW_VRAM, VRAMState.NO_VRAM]:
         for m in control_models:
             if hasattr(m, 'set_lowvram'):
                 m.set_lowvram(True)
@@ -242,27 +244,23 @@ def load_controlnet_gpu(control_models):
             m.cpu()
 
     device = get_torch_device()
-    current_gpu_controlnets = []
-    for m in models:
-        current_gpu_controlnets.append(m.to(device))
+    current_gpu_controlnets = [m.to(device) for m in models]
 
 
 def load_if_low_vram(model):
     global vram_state
-    if vram_state == VRAMState.LOW_VRAM or vram_state == VRAMState.NO_VRAM:
+    if vram_state in [VRAMState.LOW_VRAM, VRAMState.NO_VRAM]:
         return model.to(get_torch_device())
     return model
 
 def unload_if_low_vram(model):
     global vram_state
-    if vram_state == VRAMState.LOW_VRAM or vram_state == VRAMState.NO_VRAM:
+    if vram_state in [VRAMState.LOW_VRAM, VRAMState.NO_VRAM]:
         return model.cpu()
     return model
 
 def get_autocast_device(dev):
-    if hasattr(dev, 'type'):
-        return dev.type
-    return "cuda"
+    return dev.type if hasattr(dev, 'type') else "cuda"
 
 
 def xformers_enabled():
@@ -272,17 +270,12 @@ def xformers_enabled():
         return False
     if xpu_available:
         return False
-    if directml_enabled:
-        return False
-    return XFORMERS_IS_AVAILABLE
+    return False if directml_enabled else XFORMERS_IS_AVAILABLE
 
 
 def xformers_enabled_vae():
     enabled = xformers_enabled()
-    if not enabled:
-        return False
-
-    return XFORMERS_ENABLED_VAE
+    return False if not enabled else XFORMERS_ENABLED_VAE
 
 def pytorch_attention_enabled():
     global ENABLE_PYTORCH_ATTENTION
@@ -302,28 +295,24 @@ def get_free_memory(dev=None, torch_free_too=False):
     if dev is None:
         dev = get_torch_device()
 
-    if hasattr(dev, 'type') and (dev.type == 'cpu' or dev.type == 'mps'):
+    if hasattr(dev, 'type') and dev.type in ['cpu', 'mps']:
         mem_free_total = psutil.virtual_memory().available
         mem_free_torch = mem_free_total
+    elif directml_enabled:
+        mem_free_total = 1024 * 1024 * 1024 #TODO
+        mem_free_torch = mem_free_total
+    elif xpu_available:
+        mem_free_total = torch.xpu.get_device_properties(dev).total_memory - torch.xpu.memory_allocated(dev)
+        mem_free_torch = mem_free_total
     else:
-        if directml_enabled:
-            mem_free_total = 1024 * 1024 * 1024 #TODO
-            mem_free_torch = mem_free_total
-        elif xpu_available:
-            mem_free_total = torch.xpu.get_device_properties(dev).total_memory - torch.xpu.memory_allocated(dev)
-            mem_free_torch = mem_free_total
-        else:
-            stats = torch.cuda.memory_stats(dev)
-            mem_active = stats['active_bytes.all.current']
-            mem_reserved = stats['reserved_bytes.all.current']
-            mem_free_cuda, _ = torch.cuda.mem_get_info(dev)
-            mem_free_torch = mem_reserved - mem_active
-            mem_free_total = mem_free_cuda + mem_free_torch
+        stats = torch.cuda.memory_stats(dev)
+        mem_active = stats['active_bytes.all.current']
+        mem_reserved = stats['reserved_bytes.all.current']
+        mem_free_cuda, _ = torch.cuda.mem_get_info(dev)
+        mem_free_torch = mem_reserved - mem_active
+        mem_free_total = mem_free_cuda + mem_free_torch
 
-    if torch_free_too:
-        return (mem_free_total, mem_free_torch)
-    else:
-        return mem_free_total
+    return (mem_free_total, mem_free_torch) if torch_free_too else mem_free_total
 
 def maximum_batch_area():
     global vram_state
@@ -369,11 +358,7 @@ def should_use_fp16():
 
     #FP32 is faster on those cards?
     nvidia_16_series = ["1660", "1650", "1630", "T500", "T550", "T600"]
-    for x in nvidia_16_series:
-        if x in props.name:
-            return False
-
-    return True
+    return all(x not in props.name for x in nvidia_16_series)
 
 def soft_empty_cache():
     global xpu_available

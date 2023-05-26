@@ -92,15 +92,15 @@ def load_lora(path, to_load):
     patch_dict = {}
     loaded_keys = set()
     for x in to_load:
-        alpha_name = "{}.alpha".format(x)
+        alpha_name = f"{x}.alpha"
         alpha = None
         if alpha_name in lora.keys():
             alpha = lora[alpha_name].item()
             loaded_keys.add(alpha_name)
 
-        A_name = "{}.lora_up.weight".format(x)
-        B_name = "{}.lora_down.weight".format(x)
-        mid_name = "{}.lora_mid.weight".format(x)
+        A_name = f"{x}.lora_up.weight"
+        B_name = f"{x}.lora_down.weight"
+        mid_name = f"{x}.lora_mid.weight"
 
         if A_name in lora.keys():
             mid = None
@@ -113,12 +113,12 @@ def load_lora(path, to_load):
 
 
         ######## loha
-        hada_w1_a_name = "{}.hada_w1_a".format(x)
-        hada_w1_b_name = "{}.hada_w1_b".format(x)
-        hada_w2_a_name = "{}.hada_w2_a".format(x)
-        hada_w2_b_name = "{}.hada_w2_b".format(x)
-        hada_t1_name = "{}.hada_t1".format(x)
-        hada_t2_name = "{}.hada_t2".format(x)
+        hada_w1_a_name = f"{x}.hada_w1_a"
+        hada_w1_b_name = f"{x}.hada_w1_b"
+        hada_w2_a_name = f"{x}.hada_w2_a"
+        hada_w2_b_name = f"{x}.hada_w2_b"
+        hada_t1_name = f"{x}.hada_t1"
+        hada_t2_name = f"{x}.hada_t2"
         if hada_w1_a_name in lora.keys():
             hada_t1 = None
             hada_t2 = None
@@ -136,13 +136,13 @@ def load_lora(path, to_load):
 
 
         ######## lokr
-        lokr_w1_name = "{}.lokr_w1".format(x)
-        lokr_w2_name = "{}.lokr_w2".format(x)
-        lokr_w1_a_name = "{}.lokr_w1_a".format(x)
-        lokr_w1_b_name = "{}.lokr_w1_b".format(x)
-        lokr_t2_name = "{}.lokr_t2".format(x)
-        lokr_w2_a_name = "{}.lokr_w2_a".format(x)
-        lokr_w2_b_name = "{}.lokr_w2_b".format(x)
+        lokr_w1_name = f"{x}.lokr_w1"
+        lokr_w2_name = f"{x}.lokr_w2"
+        lokr_w1_a_name = f"{x}.lokr_w1_a"
+        lokr_w1_b_name = f"{x}.lokr_w1_b"
+        lokr_t2_name = f"{x}.lokr_t2"
+        lokr_w2_a_name = f"{x}.lokr_w2_a"
+        lokr_w2_b_name = f"{x}.lokr_w2_b"
 
         lokr_w1 = None
         if lokr_w1_name in lora.keys():
@@ -192,29 +192,29 @@ def model_lora_keys(model, key_map={}):
 
     counter = 0
     for b in range(12):
-        tk = "model.diffusion_model.input_blocks.{}.1".format(b)
+        tk = f"model.diffusion_model.input_blocks.{b}.1"
         up_counter = 0
         for c in LORA_UNET_MAP_ATTENTIONS:
-            k = "{}.{}.weight".format(tk, c)
+            k = f"{tk}.{c}.weight"
             if k in sdk:
-                lora_key = "lora_unet_down_blocks_{}_attentions_{}_{}".format(counter // 2, counter % 2, LORA_UNET_MAP_ATTENTIONS[c])
+                lora_key = f"lora_unet_down_blocks_{counter // 2}_attentions_{counter % 2}_{LORA_UNET_MAP_ATTENTIONS[c]}"
                 key_map[lora_key] = k
                 up_counter += 1
         if up_counter >= 4:
             counter += 1
     for c in LORA_UNET_MAP_ATTENTIONS:
-        k = "model.diffusion_model.middle_block.1.{}.weight".format(c)
+        k = f"model.diffusion_model.middle_block.1.{c}.weight"
         if k in sdk:
-            lora_key = "lora_unet_mid_block_attentions_0_{}".format(LORA_UNET_MAP_ATTENTIONS[c])
+            lora_key = f"lora_unet_mid_block_attentions_0_{LORA_UNET_MAP_ATTENTIONS[c]}"
             key_map[lora_key] = k
     counter = 3
     for b in range(12):
-        tk = "model.diffusion_model.output_blocks.{}.1".format(b)
+        tk = f"model.diffusion_model.output_blocks.{b}.1"
         up_counter = 0
         for c in LORA_UNET_MAP_ATTENTIONS:
-            k = "{}.{}.weight".format(tk, c)
+            k = f"{tk}.{c}.weight"
             if k in sdk:
-                lora_key = "lora_unet_up_blocks_{}_attentions_{}_{}".format(counter // 3, counter % 3, LORA_UNET_MAP_ATTENTIONS[c])
+                lora_key = f"lora_unet_up_blocks_{counter // 3}_attentions_{counter % 3}_{LORA_UNET_MAP_ATTENTIONS[c]}"
                 key_map[lora_key] = k
                 up_counter += 1
         if up_counter >= 4:
@@ -223,7 +223,7 @@ def model_lora_keys(model, key_map={}):
     text_model_lora_key = "lora_te_text_model_encoder_layers_{}_{}"
     for b in range(24):
         for c in LORA_CLIP_MAP:
-            k = "transformer.text_model.encoder.layers.{}.{}.weight".format(b, c)
+            k = f"transformer.text_model.encoder.layers.{b}.{c}.weight"
             if k in sdk:
                 lora_key = text_model_lora_key.format(b, LORA_CLIP_MAP[c])
                 key_map[lora_key] = k
@@ -233,18 +233,18 @@ def model_lora_keys(model, key_map={}):
     ds_counter = 0
     counter = 0
     for b in range(12):
-        tk = "model.diffusion_model.input_blocks.{}.0".format(b)
+        tk = f"model.diffusion_model.input_blocks.{b}.0"
         key_in = False
         for c in LORA_UNET_MAP_RESNET:
-            k = "{}.{}.weight".format(tk, c)
+            k = f"{tk}.{c}.weight"
             if k in sdk:
-                lora_key = "lora_unet_down_blocks_{}_{}".format(counter // 2, LORA_UNET_MAP_RESNET[c].format(counter % 2))
+                lora_key = f"lora_unet_down_blocks_{counter // 2}_{LORA_UNET_MAP_RESNET[c].format(counter % 2)}"
                 key_map[lora_key] = k
                 key_in = True
         for bb in range(3):
-            k = "{}.{}.op.weight".format(tk[:-2], bb)
+            k = f"{tk[:-2]}.{bb}.op.weight"
             if k in sdk:
-                lora_key = "lora_unet_down_blocks_{}_downsamplers_0_conv".format(ds_counter)
+                lora_key = f"lora_unet_down_blocks_{ds_counter}_downsamplers_0_conv"
                 key_map[lora_key] = k
                 ds_counter += 1
         if key_in:
@@ -252,12 +252,12 @@ def model_lora_keys(model, key_map={}):
 
     counter = 0
     for b in range(3):
-        tk = "model.diffusion_model.middle_block.{}".format(b)
+        tk = f"model.diffusion_model.middle_block.{b}"
         key_in = False
         for c in LORA_UNET_MAP_RESNET:
-            k = "{}.{}.weight".format(tk, c)
+            k = f"{tk}.{c}.weight"
             if k in sdk:
-                lora_key = "lora_unet_mid_block_{}".format(LORA_UNET_MAP_RESNET[c].format(counter))
+                lora_key = f"lora_unet_mid_block_{LORA_UNET_MAP_RESNET[c].format(counter)}"
                 key_map[lora_key] = k
                 key_in = True
         if key_in:
@@ -266,18 +266,18 @@ def model_lora_keys(model, key_map={}):
     counter = 0
     us_counter = 0
     for b in range(12):
-        tk = "model.diffusion_model.output_blocks.{}.0".format(b)
+        tk = f"model.diffusion_model.output_blocks.{b}.0"
         key_in = False
         for c in LORA_UNET_MAP_RESNET:
-            k = "{}.{}.weight".format(tk, c)
+            k = f"{tk}.{c}.weight"
             if k in sdk:
-                lora_key = "lora_unet_up_blocks_{}_{}".format(counter // 3, LORA_UNET_MAP_RESNET[c].format(counter % 3))
+                lora_key = f"lora_unet_up_blocks_{counter // 3}_{LORA_UNET_MAP_RESNET[c].format(counter % 3)}"
                 key_map[lora_key] = k
                 key_in = True
         for bb in range(3):
-            k = "{}.{}.conv.weight".format(tk[:-2], bb)
+            k = f"{tk[:-2]}.{bb}.conv.weight"
             if k in sdk:
-                lora_key = "lora_unet_up_blocks_{}_upsamplers_0_conv".format(us_counter)
+                lora_key = f"lora_unet_up_blocks_{us_counter}_upsamplers_0_conv"
                 key_map[lora_key] = k
                 us_counter += 1
         if key_in:
@@ -331,11 +331,8 @@ class ModelPatcher:
         return self.model.diffusion_model.dtype
 
     def add_patches(self, patches, strength=1.0):
-        p = {}
         model_sd = self.model.state_dict()
-        for k in patches:
-            if k in model_sd:
-                p[k] = patches[k]
+        p = {k: patches[k] for k in patches if k in model_sd}
         self.patches += [(strength, p)]
         return p.keys()
 

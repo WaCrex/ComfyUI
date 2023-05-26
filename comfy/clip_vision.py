@@ -23,8 +23,7 @@ class ClipVisionModel():
     def encode_image(self, image):
         img = torch.clip((255. * image[0]), 0, 255).round().int()
         inputs = self.processor(images=[img], return_tensors="pt")
-        outputs = self.model(**inputs)
-        return outputs
+        return self.model(**inputs)
 
 def convert_to_transformers(sd):
     sd_k = sd.keys()
